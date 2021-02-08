@@ -1,6 +1,6 @@
 # Monitoring green macroalgae proliferation on beaches using Landsat 5 and 8 in Google Earth Engine 
 ## Purpose
-Run a simple detection tool to identify green macroalgae proliferation on beaches using Landsat SR data in the Google Earth Engine environment. 
+Run a simple detection tool to estimate green macroalgae surfaces on beaches using Landsat SR data in the Google Earth Engine environment. 
 
 ## About the data
 The detection tool uses the Google Earth Engine API and the Landsat 5 and 8 Surface Reflectance data. 
