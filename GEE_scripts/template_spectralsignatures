@@ -1,0 +1,67 @@
+// Import shapefile for the studied sites 
+var St_Michel = ee.FeatureCollection("users/lschreyers/St_Michel_Greve");
+var Locquirec = ee.FeatureCollection("users/lschreyers/Locquirec");
+
+// Create a feature collection for the two sites 
+var beach1 = St_Michel.first().geometry();
+var beach2 = Locquirec.first().geometry(); 
+var beaches = ee.FeatureCollection([beach1, beach2]); 
+
+Map.addLayer(beaches, {color:'blue'},"Saint-Michel-en-Grève area");
+Map.centerObject(beaches,13); 
+
+// Select image of interest
+var image_2016 = ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_203026_20160707')
+.clip(beaches); 
+
+// True color composite visualization parameters
+var trueColor_L8 = { 
+  min: 0, 
+  max: 3000, 
+  bands: ['B5','B4','B3'], 
+};  
+
+// Visualize it 
+Map.addLayer(image_2016, trueColor_L8, 'Landsat 8 image in July 2016');
+
+var points2016 = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point(-3.644984291753295,48.678009489090904),{'label': 'algae2'}),
+  ee.Feature(ee.Geometry.Point(-3.5687666403861074,48.682628138399),{'label': 'algae3'}),
+  ee.Feature(ee.Geometry.Point(-3.635972069463256,48.68801130551632), {'label':'water1'}),
+  ee.Feature(ee.Geometry.Point(-3.59666161414099,48.684781474295), {'label': 'water2'}),
+  ee.Feature(ee.Geometry.Point(-3.6094933020682363,48.67367380717207),{'label':'sand1'}),
+  ee.Feature(ee.Geometry.Point(-3.6403923499197988,48.67883124294477),{'label':'sand2'})]);
+
+
+var image_upload = ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_203026_20160707'); 
+var image2016 = image_upload.select(['B2','B3','B4','B5','B6','B7']);
+var wavelengths = [0.4825*1000, 0.5625*1000, 0.655*1000, 0.865*1000, 1.61*1000, 2.2*1000];
+
+// Define chart options 
+var options = {
+  title: 'Landsat 8 spectra at 5 points in 2016',
+  hAxis: {title: 'Wavelength (micrometers)'},
+  vAxis: {title: 'Surface Reflectance'},
+  lineWidth: 1,
+  pointSize: 4,
+  series: {
+    0: {color: '00A89B'}, // algae
+    1: {color: '00A89B'}, // algae
+    2: {color: '0001A6'}, // water
+    3: {color: '0001A6'}, // water
+    4: {color: 'DB9E30'}, // sand
+    5: {color: 'DB9E30'}, // sand
+    
+}};
+
+// Create the chart and set options.
+var spectraChart2016 = ui.Chart.image.regions(
+  image2016, points2016, ee.Reducer.mean(), 30, 'label', wavelengths)
+    .setChartType('ScatterChart')
+.setOptions(options);
+
+// Display the chart.
+print(spectraChart2016);
+
+
+
