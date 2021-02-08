@@ -48,8 +48,8 @@ print(l5final,"Landsat 5 final collection for 1984");
 var image1 = ee.Image('LANDSAT/LT05/C01/T1_SR/LT05_203026_19840426') 
 .clip(beaches); 
 
-// Visualization parameters for true color composite for Landsat 5 (to be adapted for Landsat 8)
-var trueColor432Vis_L5 = {
+// Visualization parameters for false color composite for Landsat 5 (to be adapted for Landsat 8)
+var FalseColor_L5 = {
   min: 0,
   max: 3000,
   bands: ['B4','B3','B2'],
@@ -75,8 +75,8 @@ var NDVIvis = {min: 0, max: 1, palette: ['BDFFC9','1E4026']};
 
 var NDVIMasked = NDVI.updateMask(NDVI.gt(0.22).and(NDWI.lt(-0.2)));
 
-// Load images - True color version and algae mask 
-Map.addLayer(image1, trueColor432Vis_L5, "True Color");
+// Load images - False color composite and algae mask 
+Map.addLayer(image1, FalseColor_L5, "False Color");
 Map.addLayer(NDVIMasked,NDVIvis, "Algae mask"); 
 
 // *** PART 3: CALCULATE AREA COVERED BY GREEN MACROALGAE AND CREATE A CHART ***
