@@ -1,0 +1,176 @@
+// *** PART 1: DATA PREPARATION: SHAPEFILE LOADING, CREATING A COLLECTION OVER LANDSAT 8 ***
+// Import shapefile for the studied sites 
+
+var Locquirec = ee.FeatureCollection("users/lschreyers/Locquirec");
+var St_Michel = ee.FeatureCollection("users/lschreyers/St_Michel_Greve");
+
+// Create a feature collection for the two sites 
+var beach1 = St_Michel.first().geometry();
+var beach2 = Locquirec.first().geometry(); 
+var beaches = ee.FeatureCollection([beach1, beach2]); 
+
+//Visualize them
+Map.addLayer(beaches, {color:'blue'},"Saint-Michel-en-Grève area");
+Map.centerObject(beaches,13); 
+
+//Load Landsat 5 Surface Reflectance collection and filter by years and months
+var l8= ee.ImageCollection("LANDSAT/LC08/C01/T1_SR")
+.filter(ee.Filter.calendarRange(2016,2016,'year'))
+.filter(ee.Filter.calendarRange(4,10,'month'))
+//filter according to drawn boundary
+.filterBounds(beaches) 
+//filter according to cloud coverage
+.filterMetadata('CLOUD_COVER', 'less_than', 30)
+// sort by cloud coverage
+.sort('CLOUD_COVER'); 
+
+print (l8, "Collection of Landsat 8 images in 2016"); 
+
+// Excluding some images that do not meet the criteria (too much cloud or high tide)
+var l8primary = l8
+.filter(ee.Filter.date('2016-09-25','2016-09-26').not());
+
+var l8final = l8primary
+.sort('SENSING_TIME'); 
+
+// Add images that were initially excluded 
+var addimage1= ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_203026_20160707');
+var addimage2 = ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_203026_20160808');
+
+var l8secondary = ee.ImageCollection([addimage1, addimage2]);
+
+var l8final = l8primary.merge(l8secondary)
+.sort('SENSING_TIME');
+
+// Display the final collection for Landsat 8 images
+print(l8final,"Landsat 8 final collection for 2016");
+
+// *** PART 2: VISUALIZE ONE OR A FEW IMAGE(S) 
+//Select image of interest
+var image1 = ee.Image("LANDSAT/LC08/C01/T1_SR/LC08_203026_20160707")
+.clip(beaches); 
+
+// False color composite visualization parameters
+var falseColor_L8 = { 
+  min: 0, 
+  max: 3000, 
+  bands: ['B5','B4','B3'], 
+};  
+
+
+// NDVI expression
+var NDVI= image1.expression('(NIR - red) / (NIR + red)', 
+{
+  red: image1.select('B4'), 
+  NIR: image1.select('B5'), 
+}); 
+
+//NDWI expression
+var NDWI = image1.expression('(green - NIR)/ (green + NIR)', 
+{
+  green: image1.select('B3'),
+  NIR: image1.select('B5'),
+
+}); 
+
+// Mask visualization parameter 
+var NDVIvis = {min: 0, max: 1, palette: ['BDFFC9','1E4026']}; 
+var NDVIMasked = NDVI.updateMask(NDVI.gt(0.22).and(NDWI.lt(-0.2))); 
+
+// Load images - False color composite and algae mask 
+Map.addLayer (image1,falseColor_L8, "Landsat 8"); 
+Map.addLayer(NDVIMasked, NDVIvis, 'NDVI > 0.25 Landsat 8');
+
+// *** PART 3: CALCULATE AREA COVERED BY GREEN MACROALGAE AND CREATE A CHART ***
+//Define NDVI and NDWI threshold values 
+var NDVIThreshold_L8 = 0.22;
+var NDWIThreshold_L8 = -0.2; 
+
+// Create a function to detect all pixels that meet the defined conditions 
+var algaefunction_L8 = function(image){
+  //add the NDVI band to the image collection 
+  var NDVI_L8 = image.normalizedDifference(['B5', 'B4']).multiply(1.0863).rename('NDVI'); 
+  //add the NDWI band to the image collection 
+  var NDWI_L8 = image.normalizedDifference(['B3','B5']).rename('NDWI'); 
+  //get pixels above the threshold
+  var algae_L8 = NDVI_L8.gt(NDVIThreshold_L8).and(NDWI_L8.lt(NDWIThreshold_L8));
+  //mask those pixels from the image
+
+  image = image.updateMask(algae_L8).addBands(NDVI_L8);
+
+//Calculate the area covered by these pixels
+  var area_L8 = ee.Image.pixelArea();
+  var algaeArea_L8 = algae_L8.multiply(area_L8).rename('algaeArea_L8');
+
+  image = image.addBands(algaeArea_L8);
+
+  var stats = algaeArea_L8.reduceRegion({
+    reducer: ee.Reducer.sum(), 
+    geometry: beaches, 
+    scale: 30,
+  });
+
+  return image.set(stats);
+};
+
+// Update the Landsat 8 collection, adding the new band on algae estimated surface 
+var collection = l8final.map(algaefunction_L8); 
+
+//Create a chart displaying the surface estimates by date
+var chart_l8 = ui.Chart.image.seriesByRegion(
+  collection, beaches, ee.Reducer.sum(), 'algaeArea_L8',30)
+  .setChartType('ScatterChart')
+  .setSeriesNames(['Saint-Michel-en-Grève','Fonds de la Baie'])
+  .setOptions({
+  title: "Green tide area at Saint-Michel-en-Grève",
+  vAxis: {title: 'Area in m2'},
+  pointSize:4,
+  lineWidth:1,
+  series: {
+            0: {color: 'FF0000'}, // Saint-Michel-en-Grève
+            1: {color: '0000FF'}, // Fonds-de-la-Baie
+}
+});
+
+print(chart_l8) ; 
+
+// Spectral signatures
+// Select bands of interest and define the wavelenghts 
+var points2016 = ee.FeatureCollection([
+  ee.Feature(ee.Geometry.Point(-3.644984291753295,48.678009489090904),{'label': 'algae1'}),
+  ee.Feature(ee.Geometry.Point(-3.5687666403861074,48.682628138399),{'label': 'algae2'}),
+  ee.Feature(ee.Geometry.Point(-3.635972069463256,48.68801130551632), {'label':'water1'}),
+  ee.Feature(ee.Geometry.Point(-3.59666161414099,48.684781474295), {'label': 'water2'}),
+  ee.Feature(ee.Geometry.Point(-3.6094933020682363,48.67367380717207),{'label':'sand1'}),
+  ee.Feature(ee.Geometry.Point(-3.6403923499197988,48.67883124294477),{'label':'sand2'})]);
+
+Map.addLayer(points2016, {color:'white'},"Pixels for spectral signature"); 
+
+var image_upload = ee.Image('LANDSAT/LC08/C01/T1_SR/LC08_203026_20160707'); 
+var image2016 = image_upload.select(['B2','B3','B4','B5','B6','B7']);
+var wavelengths = [0.4825*1000, 0.5625*1000, 0.655*1000, 0.865*1000, 1.61*1000, 2.2*1000];
+
+// Define chart options 
+var options = {
+  title: 'Landsat 8 spectra at 6 points in 2016',
+  hAxis: {title: 'Wavelength (micrometers)'},
+  vAxis: {title: 'Surface Reflectance'},
+  lineWidth: 1,
+  pointSize: 4,
+  series: {
+    0: {color: '00A89B'}, // algae
+    1: {color: '00A89B'}, // algae
+    2: {color: '0001A6'}, // water
+    3: {color: '0001A6'}, // water
+    4: {color: 'DB9E30'}, // sand
+    5: {color: 'DB9E30'}, // sand
+}};
+
+// Create the chart and set options.
+var spectraChart2016 = ui.Chart.image.regions(
+  image2016, points2016, ee.Reducer.mean(), 30, 'label', wavelengths)
+    .setChartType('ScatterChart')
+.setOptions(options);
+
+// Display the chart.
+print(spectraChart2016);
